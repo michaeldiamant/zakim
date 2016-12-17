@@ -2,7 +2,9 @@ package mld.zakim
 
 import java.nio.ByteBuffer
 
-object ParserDemo {
+import com.typesafe.scalalogging.StrictLogging
+
+object ParserDemo extends StrictLogging {
 
   private case class MutableBidRequest(
     var regs: Option[Position],
@@ -40,7 +42,7 @@ object ParserDemo {
     val json = arrayJson
     val _ = Parser.parse(json, req)(
       (key, p, r) => {
-        println("key = " + key)
+        logger.debug("key = " + key)
         if (key == JsonPath("imp.banner.w")) r.w = Some(p)
         else if (key == JsonPath("imp.banner.h")) r.h = Some(p)
         else if (key == JsonPath("regs")) r.regs = Some(p)
@@ -49,7 +51,7 @@ object ParserDemo {
 
       })
 
-    println(req)
+    logger.debug(req.toString)
     req.w.foreach { case Position(StartIndex(s), EndIndex(e)) =>
       json.position(s)
       val arr = new Array[Byte](e - s)
@@ -57,7 +59,7 @@ object ParserDemo {
         json.get(arr, 0, e - s)
         arr
       }, "UTF-8"))
-      println(s"ad size width = $zz")
+      logger.debug(s"ad size width = $zz")
     }
 
     req.page.foreach { case Position(StartIndex(s), EndIndex(e)) =>
@@ -67,7 +69,7 @@ object ParserDemo {
         json.get(arr, 0, e - s)
         arr
       }, "UTF-8")
-      println(s"page = $zz")
+      logger.debug(s"page = $zz")
     }
   }
 }

@@ -43,4 +43,7 @@ val root = (project in file("."))
   .settings(name := "zakim")
   .settings(baseSettings ++ testSettings: _*)
   .settings(libraryDependencies ++= List(
+    "org.slf4j" % "slf4j-api" % "1.7.22",
+    "ch.qos.logback" % "logback-classic" % "1.1.7",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
     "org.specs2" %% "specs2-core" % "3.8.5" % "test"))

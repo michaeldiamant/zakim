@@ -2,7 +2,9 @@ package mld.zakim
 
 import java.nio.ByteBuffer
 
-object Parser {
+import com.typesafe.scalalogging.StrictLogging
+
+object Parser extends StrictLogging {
   sealed trait State
   case object StartOfObject extends State
   case object StartOfKey extends State
@@ -23,7 +25,7 @@ object Parser {
       t: T,
       currentKey: List[Byte]): T = s match {
       case StartOfObject =>
-        println("==> StartOfObject")
+        logger.debug("==> StartOfObject")
         val s = json.get().toChar
         s match {
           case ' ' | '\t' | '\n' | '\r' => doParse(StartOfObject, keys, t, Nil)
@@ -32,13 +34,13 @@ object Parser {
         }
 
       case StartOfKey =>
-        println("==> StartOfKey")
+        logger.debug("==> StartOfKey")
         val z = json.get().toChar
         z match {
           case ' ' | '\t' | '\n' | '\r' => doParse(StartOfKey, keys, t, currentKey)
           case '"' =>
             var k = json.get()
-            println(s">> Found ${k.toChar}")
+            logger.debug(s">> Found ${k.toChar}")
             var reverseKey: List[Byte] = Nil
             while (k != '"') {
               reverseKey = k :: reverseKey
@@ -51,7 +53,7 @@ object Parser {
         }
 
       case EndOfKey =>
-        println("==> EndOfKey")
+        logger.debug("==> EndOfKey")
         val z = json.get().toChar
         z match {
           case ' ' | '\t' | '\n' | '\r' => doParse(EndOfKey, keys, t, currentKey)
@@ -68,7 +70,7 @@ object Parser {
           case _ => sys.error(s"Unexpected state! = [${z.toChar}] at ${json.position()}")
         }
       case StartOfString =>
-        println("==> StartOfString")
+        logger.debug("==> StartOfString")
         val startIndex = StartIndex(json.position())
         var k = json.get()
 
@@ -83,7 +85,7 @@ object Parser {
           Position(startIndex, endIndex), t),
           Nil)
       case EndOfString =>
-        println("==> EndOfString")
+        logger.debug("==> EndOfString")
         if (json.limit() == json.position())
           t
         else {
@@ -95,7 +97,7 @@ object Parser {
           }
         }
       case StartOfValue =>
-        println("==> StartOfValue")
+        logger.debug("==> StartOfValue")
         val startIndex = StartIndex(json.position() - 1)
         var kPrev = json.get()
         var k = kPrev
@@ -114,7 +116,7 @@ object Parser {
           Nil)
 
       case EndOfValue =>
-        println("==> EndOfValue")
+        logger.debug("==> EndOfValue")
         if (json.limit() == json.position())
           t
         else {
@@ -129,7 +131,7 @@ object Parser {
         }
 
       case EndOfObject =>
-        println("==> EndOfObject")
+        logger.debug("==> EndOfObject")
         if (json.limit() == json.position())
           t
         else {
@@ -156,13 +158,13 @@ object Parser {
               // {{"banner":{"w":740,"h":30}} , {"banner":{"w":320,"h":240}}]
               doParse(EndOfObject, keys, t, Nil)
             case ']' =>
-              println("Dropping " + keys.headOption + " ... leaving " + keys.tail)
+              logger.debug("Dropping " + keys.headOption + " ... leaving " + keys.tail)
               doParse(EndOfArray, keys.tail, t, Nil)
             case x => sys.error(s"Unsupported state = ${x.toChar} at position = ${json.position()}")
           }
         }
       case StartOfArray =>
-        println("==> StartOfArray")
+        logger.debug("==> StartOfArray")
         val z = json.get().toChar
         z match {
           case ' ' | '\t' | '\n' | '\r' => doParse(StartOfArray, keys, t, currentKey)
@@ -173,7 +175,7 @@ object Parser {
           case _ => doParse(StartOfValue, keys, t, Nil)
         }
       case EndOfArray =>
-        println("==> EndOfArray")
+        logger.debug("==> EndOfArray")
         val z = json.get().toChar
         z match {
           case ',' => doParse(StartOfKey, keys.tail, t, Nil)
