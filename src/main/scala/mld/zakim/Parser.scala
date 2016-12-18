@@ -17,6 +17,7 @@ object Parser extends StrictLogging {
   case object StartOfArray extends State
   case object EndOfArray extends State
   case object LookingForNextTerm extends State
+  case object LookingForNextFieldAfterEndOfObject extends State
 
   def parse[T](json: ByteBuffer, init: T)
     (f: (JsonPath, Position, T) => T): T = {
@@ -175,32 +176,26 @@ object Parser extends StrictLogging {
                 val z = json.get().toChar
                 z match {
                   case ',' =>
-                    /// FIXME Test is failing because the whitespace
-                    // is not accounted for.  Needs to be broken up
-                    // into another state like LookingForNextTerm or ideally
-                    // reuse that state
-
-                    // Can either be an object or a key
-                    // Unclear if it can be an array
-                    // Need to peak ahead in order to get enough context
-                    val curPosition = json.position()
-                    logger.debug(s"our position is = $curPosition")
-                    val zz = json.get().toChar
-                    zz match {
-                      case '"' =>
-                        json.position(curPosition)
-                        doParse(StartOfKey, keys.tail, t)
-                      case '{' =>
-                        // Don't strip head key in this case
-                        json.position(curPosition)
-                        doParse(StartOfObject, keys, t)
-                    }
+                    doParse(LookingForNextFieldAfterEndOfObject, keys, t)
                   case '}' =>
                     // Nested end of objects could happen inside an array. e.g.:
                     // {{"banner":{"w":740,"h":30}} , {"banner":{"w":320,"h":240}}]
                     doParse(EndOfObject, keys.tail, t)
                   case ']' =>
                     doParse(EndOfArray, keys, t)
+                  case x => sys.error(s"Unsupported state = $x " +
+                    s"at position = ${json.position() - 1}")
+                }
+              case LookingForNextFieldAfterEndOfObject =>
+                val curPosition = json.position()
+                json.get().toChar match {
+                  case '"' =>
+                    json.position(curPosition)
+                    doParse(StartOfKey, keys.tail, t)
+                  case '{' =>
+                    // Don't strip head key in this case
+                    json.position(curPosition)
+                    doParse(StartOfObject, keys, t)
                   case x => sys.error(s"Unsupported state = $x " +
                     s"at position = ${json.position() - 1}")
                 }

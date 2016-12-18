@@ -13,8 +13,6 @@ class ParserSpec extends Specification {
     s"example-json/without-whitespace/$filename"
   private def withWhitespace(filename: String): String =
     s"example-json/with-whitespace/$filename"
-  private def position(start: Int, end: Int): Position =
-    Position(StartIndex(start), EndIndex(end))
 
   private def loadJson(resource: String): ByteBuffer = {
     val s = Source.fromInputStream(
@@ -57,7 +55,7 @@ class ParserSpec extends Specification {
     scenario("flat-01")
     scenario("flat-02")
     scenario("flat-03")
-//    scenario("nested-01") // After addressing FIXME
-//    scenario("nested-02") // After addressing FIXME
+    scenario("nested-01")
+    scenario("nested-02")
   }
 }
