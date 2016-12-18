@@ -175,6 +175,11 @@ object Parser extends StrictLogging {
                 val z = json.get().toChar
                 z match {
                   case ',' =>
+                    /// FIXME Test is failing because the whitespace
+                    // is not accounted for.  Needs to be broken up
+                    // into another state like LookingForNextTerm or ideally
+                    // reuse that state
+
                     // Can either be an object or a key
                     // Unclear if it can be an array
                     // Need to peak ahead in order to get enough context
