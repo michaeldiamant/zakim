@@ -37,15 +37,19 @@ class ParserSpec extends Specification {
     def scenario(name: String): Fragment =
       name ! assertPositions(withoutWhitespace(s"$name.json"), _ ====
         loadResult(withoutWhitespace(s"$name.result")))
-    scenario("empty")
+    scenario("empty-01")
+    scenario("empty-02")
     scenario("flat-01")
     scenario("flat-02")
     scenario("flat-03")
+    scenario("flat-04")
+    scenario("flat-05")
     scenario("nested-01")
     scenario("nested-02")
     scenario("nested-03")
     scenario("nested-04")
     scenario("nested-05")
+    scenario("nested-06")
   }
 
   "with whitespace" >> {

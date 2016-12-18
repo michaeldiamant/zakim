@@ -18,9 +18,63 @@ object Parser extends StrictLogging {
   case object EndOfArray extends State
   case object LookingForNextTerm extends State
   case object LookingForNextFieldAfterEndOfObject extends State
+  case object StartOfArrayValue extends State
+  case object EndOfArrayValue extends State
 
   def parse[T](json: ByteBuffer, init: T)
     (f: (JsonPath, Position, T) => T): T = {
+
+    def parseValue(): (StartIndex, EndIndex) = {
+      val first = json.get(json.position())
+      val startIndex =
+        if (first == '"') StartIndex(json.position())
+        else StartIndex(json.position())
+      var kPrev = json.get()
+      var k = kPrev
+      logger.debug(s"first = ${first.toChar} and k = ${k.toChar}")
+
+      var reversedValue = List.empty[Byte]
+      val sb = new StringBuilder(k.toChar.toString)
+      if (first == '"') {
+        // String
+        k = json.get() // Perform read to get next byte after opening
+        // quote (")
+        while (k != '"' && k != '}' && kPrev != '\\') {
+          reversedValue = k :: reversedValue
+          kPrev = k
+          sb.append(k.toChar)
+          k = json.get()
+        }
+      } else {
+        while (k != ',' && k != '}' && k != ']' && k.toChar != '\n') {
+          reversedValue = k :: reversedValue
+          kPrev = k
+          sb.append(k.toChar)
+          k = json.get()
+        }
+      }
+
+      logger.debug(s"value read = $sb ... k = ${k.toChar} at position = ${json.position()}")
+      logger.debug(s"we got at 8 = ${json.get(8).toChar} and at 10 = ${json.get(10).toChar}")
+
+      val endIndex = if (k == '}' || k == ',') {
+        // At this point, we are two chars ahead of the last char
+        // that we want to track.
+        // Minus 1 to reset cursor to the next thing to look for and
+        // minus 2 to grab correct last index
+        json.position(json.position() - 1) // Side effect
+        EndIndex(json.position() - 1)
+      } else if (k == '\n') {
+        EndIndex(json.position() - 2) // Do not count newline
+      } else if (k == ']') {
+        json.position(json.position() - 1) // Side effect
+        EndIndex(json.position() - 1)
+      } else
+        EndIndex(json.position() - 1)
+
+      (startIndex, endIndex)
+    }
+
     def doParse(
       s: State,
       keys: List[String],
@@ -109,83 +163,55 @@ object Parser extends StrictLogging {
                     s"at position = ${json.position() - 1}")
                 }
               case StartOfValue =>
-                val first = json.get(json.position())
-                val startIndex =
-                  if (first == '"') StartIndex(json.position())
-                  else StartIndex(json.position())
-                var kPrev = json.get()
-                var k = kPrev
-                logger.debug(s"first = ${first.toChar} and k = ${k.toChar}")
-
-                var reversedValue = List.empty[Byte]
-                val sb = new StringBuilder(k.toChar.toString)
-                if (first == '"') {
-                  // String
-                  k = json.get() // Perform read to get next byte after opening
-                  // quote (")
-                  while (k != '"' && k != '}' && kPrev != '\\') {
-                    reversedValue = k :: reversedValue
-                    kPrev = k
-                    sb.append(k.toChar)
-                    k = json.get()
-                  }
-                } else {
-                  while (k != ',' && k != '}' && k.toChar != '\n') {
-                    reversedValue = k :: reversedValue
-                    kPrev = k
-                    sb.append(k.toChar)
-                    k = json.get()
-                  }
-                }
-
-                logger.debug(s"value read = $sb ... k = ${k.toChar} at position = ${json.position()}")
-                logger.debug(s"we got at 8 = ${json.get(8).toChar} and at 10 = ${json.get(10).toChar}")
-
-                val endIndex = if (k == '}' || k == ',') {
-                  // At this point, we are two chars ahead of the last char
-                  // that we want to track.
-                  // Minus 1 to reset cursor to the next thing to look for and
-                  // minus 2 to grab correct last index
-                  json.position(json.position() - 1) // Side effect
-                  EndIndex(json.position() - 1)
-                } else if (k == '\n') {
-                  EndIndex(json.position() - 2) // Do not count newline
-                }
-                else
-                  EndIndex(json.position() - 1)
-
+                val (startIndex, endIndex) = parseValue()
                 doParse(EndOfValue, keys, f(
                   JsonPath(keys.reverse.mkString(JsonPath.Separator)),
                   Position(startIndex, endIndex), t))
 
-              case EndOfValue =>
+              case StartOfArrayValue =>
+                // Peek ahead to handle case of empty array
                 val z = json.get().toChar
+                json.position(json.position() - 1)
                 z match {
-                  case ',' => doParse(StartOfKey, keys.tail, t)
-                  case '}' => doParse(EndOfObject, keys.tail, t)
-                  case ']' =>
-                    // Given "site":{"cat":["IAB1"],"page": "b"
-                    // Then the "site" key should not be deleted when moving
-                    // from IAB1 to page
-                    doParse(EndOfArray, keys, t)
-                  case x => sys.error(s"Unsupported state = $x " +
-                    s"at position = ${json.position() - 1}")
+                  case ']' => doParse(EndOfArrayValue, keys, t)
+                  case _ =>
+                    val (startIndex, endIndex) = parseValue()
+                    doParse(EndOfArrayValue, keys, f(
+                      JsonPath(keys.reverse.mkString(JsonPath.Separator)),
+                      Position(startIndex, endIndex), t))
                 }
 
-              case EndOfObject =>
-                val z = json.get().toChar
-                z match {
-                  case ',' =>
-                    doParse(LookingForNextFieldAfterEndOfObject, keys, t)
-                  case '}' =>
-                    // Nested end of objects could happen inside an array. e.g.:
-                    // {{"banner":{"w":740,"h":30}} , {"banner":{"w":320,"h":240}}]
-                    doParse(EndOfObject, keys.tail, t)
-                  case ']' =>
-                    doParse(EndOfArray, keys, t)
-                  case x => sys.error(s"Unsupported state = $x " +
-                    s"at position = ${json.position() - 1}")
-                }
+              case EndOfValue => json.get().toChar match {
+                case ',' => doParse(StartOfKey, keys.tail, t)
+                case '}' => doParse(EndOfObject, keys.tail, t)
+                case ']' =>
+                  // Given "site":{"cat":["IAB1"],"page": "b"
+                  // Then the "site" key should not be deleted when moving
+                  // from IAB1 to page
+                  doParse(EndOfArray, keys, t)
+                case x => sys.error(s"Unsupported state = $x " +
+                  s"at position = ${json.position() - 1}")
+              }
+
+              case EndOfArrayValue => json.get().toChar match {
+                case ',' => doParse(StartOfArrayValue, keys, t)
+                case ']' => doParse(EndOfArray, keys, t)
+                case x => sys.error(s"Unsupported state = $x " +
+                  s"at position = ${json.position() - 1}")
+              }
+
+              case EndOfObject => json.get().toChar match {
+                case ',' =>
+                  doParse(LookingForNextFieldAfterEndOfObject, keys, t)
+                case '}' =>
+                  // Nested end of objects could happen inside an array. e.g.:
+                  // {{"banner":{"w":740,"h":30}} , {"banner":{"w":320,"h":240}}]
+                  doParse(EndOfObject, keys.tail, t)
+                case ']' =>
+                  doParse(EndOfArray, keys, t)
+                case x => sys.error(s"Unsupported state = $x " +
+                  s"at position = ${json.position() - 1}")
+              }
               case LookingForNextFieldAfterEndOfObject =>
                 val curPosition = json.position()
                 json.get().toChar match {
@@ -206,7 +232,7 @@ object Parser extends StrictLogging {
                 z match {
                   case '{' => doParse(StartOfObject, keys, t)
                   // Assume it's an array of values
-                  case _ => doParse(StartOfValue, keys, t)
+                  case _ => doParse(StartOfArrayValue, keys, t)
                 }
               case EndOfArray =>
                 logger.debug(s"Position = ${json.position()}")
