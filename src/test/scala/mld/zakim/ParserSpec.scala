@@ -4,12 +4,15 @@ import java.nio.ByteBuffer
 
 import org.specs2.matcher.MatchResult
 import org.specs2.mutable.Specification
+import org.specs2.specification.core.Fragment
 
 import io.Source
 
 class ParserSpec extends Specification {
   private def withoutWhitespace(filename: String): String =
     s"example-json/without-whitespace/$filename"
+  private def withWhitespace(filename: String): String =
+    s"example-json/with-whitespace/$filename"
   private def position(start: Int, end: Int): Position =
     Position(StartIndex(start), EndIndex(end))
 
@@ -21,6 +24,9 @@ class ParserSpec extends Specification {
     finally s.close()
   }
 
+  private def loadResult(resource: String): List[(JsonPath, Position)] =
+    Result.read(getClass.getClassLoader.getResourceAsStream(resource))
+
   private def assertPositions[T](
     resource: String,
     f: List[(JsonPath, Position)] => MatchResult[T]): MatchResult[T] =
@@ -29,17 +35,24 @@ class ParserSpec extends Specification {
       case (path, p, pathToPosition) => (path -> p) :: pathToPosition
     }.reverse)
 
-  "without whitespace flat #1" ! assertPositions(
-    withoutWhitespace("flat-01.json"),
-    _ ==== List(
-      (JsonPath("regs"), position(8, 11)),
-      (JsonPath("w"), position(16, 21)),
-      (JsonPath("h"), position(26, 30))))
+  "without whitespace" >> {
+    def scenario(name: String): Fragment =
+      name ! assertPositions(withoutWhitespace(s"$name.json"), _ ====
+        loadResult(withoutWhitespace(s"$name.result")))
+    scenario("empty")
+    scenario("flat-01")
+    scenario("flat-02")
+    scenario("flat-03")
+    scenario("nested-01")
+    scenario("nested-02")
+    scenario("nested-03")
+  }
 
-  "without whitespace nested object #1" ! assertPositions(
-    withoutWhitespace("nested-object-01.json"),
-    _ ==== List(
-      (JsonPath("regs"), position(8, 11)),
-      (JsonPath("adSize.w"), position(26, 31)),
-      (JsonPath("adSize.h"), position(36, 40))))
+  "with whitespace" >> {
+    def scenario(name: String): Fragment =
+      name ! assertPositions(withWhitespace(s"$name.json"), _ ====
+        loadResult(withWhitespace(s"$name.result")))
+    scenario("flat-01")
+    scenario("flat-02")
+  }
 }
