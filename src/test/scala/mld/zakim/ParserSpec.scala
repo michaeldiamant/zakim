@@ -45,7 +45,9 @@ class ParserSpec extends Specification {
     scenario("flat-03")
     scenario("nested-01")
     scenario("nested-02")
-    scenario("nested-03")
+    scenario("nested-03") // TODO Should make into a whitespace test
+    scenario("nested-04")
+    scenario("nested-05")
   }
 
   "with whitespace" >> {
@@ -54,5 +56,6 @@ class ParserSpec extends Specification {
         loadResult(withWhitespace(s"$name.result")))
     scenario("flat-01")
     scenario("flat-02")
+    scenario("flat-03")
   }
 }

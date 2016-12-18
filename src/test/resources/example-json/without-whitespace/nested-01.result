@@ -1,3 +1,3 @@
-regs	8	11
-adSize.w	26	31
-adSize.h	36	40
+regs	8	10
+adSize.w	26	30
+adSize.h	36	39
