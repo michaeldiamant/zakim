@@ -39,7 +39,7 @@ val testSettings = List(
   testForkedParallel in IntegrationTest := false,
   javaOptions in IntegrationTest ++= List("-Xmx4G"))
 
-val root = (project in file("."))
+val parser = (project in file("zakim-parser"))
   .settings(name := "zakim")
   .settings(baseSettings ++ testSettings: _*)
   .settings(libraryDependencies ++= List(
@@ -47,3 +47,21 @@ val root = (project in file("."))
     "ch.qos.logback" % "logback-classic" % "1.1.7",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
     "org.specs2" %% "specs2-core" % "3.8.5" % "test"))
+
+val benchmark = (project in file("zakim-benchmark"))
+  .settings(name := "zakim-benchmark")
+  .settings(baseSettings ++ testSettings: _*)
+  .settings(libraryDependencies ++= {
+    val jacksonVersion = "2.8.5"
+    List(
+      "com.fasterxml.jackson.core" % "jackson-core" % jacksonVersion,
+      "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion)
+  })
+  .enablePlugins(JmhPlugin)
+  .dependsOn(parser)
+
+val root = (project in file("."))
+  .settings(name := "aggregate")
+  .settings(baseSettings ++ testSettings: _*)
+  .aggregate(parser, benchmark)
+

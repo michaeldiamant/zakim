@@ -4,6 +4,8 @@ import java.nio.ByteBuffer
 
 import com.typesafe.scalalogging.StrictLogging
 
+import scala.annotation.tailrec
+
 object Parser extends StrictLogging {
   sealed trait State
   case object StartOfObject extends State
@@ -22,9 +24,9 @@ object Parser extends StrictLogging {
   case object EndOfArrayValue extends State
 
   def parse[T](json: ByteBuffer, init: T)
-    (f: (JsonPath, Position, T) => T): T = {
+    (f: (ByteBuffer, JsonPath, Position, T) => T): T = {
 
-    def parseValue(): (StartIndex, EndIndex) = {
+    def parseValue(): Position = {
       val first = json.get(json.position())
       val startIndex =
         if (first == '"') StartIndex(json.position())
@@ -33,29 +35,23 @@ object Parser extends StrictLogging {
       var k = kPrev
       logger.debug(s"first = ${first.toChar} and k = ${k.toChar}")
 
-      var reversedValue = List.empty[Byte]
       val sb = new StringBuilder(k.toChar.toString)
       if (first == '"') {
         // String
         k = json.get() // Perform read to get next byte after opening
         // quote (")
         while (k != '"' && k != '}' && kPrev != '\\') {
-          reversedValue = k :: reversedValue
           kPrev = k
           sb.append(k.toChar)
           k = json.get()
         }
       } else {
         while (k != ',' && k != '}' && k != ']' && k.toChar != '\n') {
-          reversedValue = k :: reversedValue
           kPrev = k
           sb.append(k.toChar)
           k = json.get()
         }
       }
-
-      logger.debug(s"value read = $sb ... k = ${k.toChar} at position = ${json.position()}")
-      logger.debug(s"we got at 8 = ${json.get(8).toChar} and at 10 = ${json.get(10).toChar}")
 
       val endIndex = if (k == '}' || k == ',') {
         // At this point, we are two chars ahead of the last char
@@ -72,9 +68,10 @@ object Parser extends StrictLogging {
       } else
         EndIndex(json.position() - 1)
 
-      (startIndex, endIndex)
+      Position(startIndex, endIndex)
     }
 
+    @tailrec
     def doParse(
       s: State,
       keys: List[String],
@@ -145,13 +142,12 @@ object Parser extends StrictLogging {
                 val startIndex = StartIndex(json.position())
                 var k = json.get()
 
-                var reversedValue = List.empty[Byte]
                 while (k != '"') {
-                  reversedValue = k :: reversedValue
                   k = json.get()
                 }
                 val endIndex = EndIndex(json.position() - 2)
                 doParse(EndOfString, keys, f(
+                  json,
                   JsonPath(keys.reverse.mkString(JsonPath.Separator)),
                   Position(startIndex, endIndex), t))
               case EndOfString =>
@@ -163,8 +159,9 @@ object Parser extends StrictLogging {
                     s"at position = ${json.position() - 1}")
                 }
               case StartOfValue =>
-                val (startIndex, endIndex) = parseValue()
+                val Position(startIndex, endIndex) = parseValue()
                 doParse(EndOfValue, keys, f(
+                  json,
                   JsonPath(keys.reverse.mkString(JsonPath.Separator)),
                   Position(startIndex, endIndex), t))
 
@@ -175,8 +172,9 @@ object Parser extends StrictLogging {
                 z match {
                   case ']' => doParse(EndOfArrayValue, keys, t)
                   case _ =>
-                    val (startIndex, endIndex) = parseValue()
+                    val Position(startIndex, endIndex) = parseValue()
                     doParse(EndOfArrayValue, keys, f(
+                      json,
                       JsonPath(keys.reverse.mkString(JsonPath.Separator)),
                       Position(startIndex, endIndex), t))
                 }

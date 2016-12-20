@@ -33,7 +33,7 @@ object ParserDemo extends StrictLogging {
     val req = MutableBidRequest.empty
     val json = arrayJson
     val _ = Parser.parse(json, req)(
-      (key, p, r) => {
+      (j, key, p, r) => {
         logger.debug("key = " + key)
         if (key == JsonPath("imp.banner.w")) r.w = Some(p)
         else if (key == JsonPath("imp.banner.h")) r.h = Some(p)

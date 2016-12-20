@@ -30,7 +30,7 @@ class ParserSpec extends Specification {
     f: List[(JsonPath, Position)] => MatchResult[T]): MatchResult[T] =
     f(Parser.parse(
       loadJson(resource), List.empty[(JsonPath, Position)]) {
-      case (path, p, pathToPosition) => (path -> p) :: pathToPosition
+      case (_, path, p, pathToPosition) => (path -> p) :: pathToPosition
     }.reverse)
 
   "without whitespace" >> {
